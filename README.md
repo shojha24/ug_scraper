@@ -8,7 +8,20 @@ Here's what schollz did for his MCMC project (using this as a source of inspirat
 
 What the plan of action looks like for me:
 - Write a scraper that goes to https://www.ultimate-guitar.com/explore filtered by a given genre or subgenre, then scrapes the links to the top ~1000-10000 songs in that genre
- - Genres I've decided I want to do: TBD
+ - Genres/subgenres I've decided I want to do: 
+  - Rock: ?genres[]=4
+  - Metal: ?genres[]=8
+  - Pop: ?genres[]=14
+  - Folk: ?genres[]=666
+  - Country: ?genres[]=49
+  - RnB: ?genres[]=1787
+  - Hiphop: ?genres[]=45
+  - Electronic: ?genres[]=16
+  - Classical: ?genres[]=216
+  - Jazz: ?genres[]=84
+  - Soundtrack: ?genres[]=680
+  - Worship: ?genres[]=1016
+  - Reggae: ?genres[]=1781
 - Write a second scraper that, for each link scraped by the first scraper:
  - A (my plan): Just retrieves all of the chords in order, transposes them to the key of C, and saves them
  - B (schollz): The same plan, but divide the song into sections as well? (not really sure what this does but sure)

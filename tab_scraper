@@ -1,0 +1,44 @@
+# Scrapes the key and the list of chords for a given tab in Ultimate Guitar
+import json
+import time
+import random
+import nodriver as uc
+import asyncio
+
+links = json.load(open('scraped_data/unique_links.json', 'r'))
+
+async def scrape_links(genre_num, browser):
+    base_url = "https://www.ultimate-guitar.com/explore"
+    links_to_chords = {}
+
+    try:
+        for link in links:
+            tab = await browser.get(link)
+
+            """Need to implement logic to scrape key and chords from tab page. Could end up being pretty complex depending on the structure of the page."""
+
+            time.sleep(random.uniform(0, 2))
+
+    finally:
+        pass
+    
+
+async def main():
+    browser = await uc.start(
+                headless=False,
+                browser_args=['--no-sandbox', '--disable-dev-shm-usage', 
+                              '--disable-blink-features=AutomationControlled', 
+                              '--ignore-certificate-errors', '--ignore-ssl-errors',
+                              '--start-maximized'],
+                lang="en-US"   # this could set iso-language-code in navigator, not recommended to change
+            )
+    
+    """
+    Need to add scraping calls here
+    """
+
+    browser.stop()
+    
+if __name__ == "__main__":
+    uc.loop().run_until_complete(main())
+
