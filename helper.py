@@ -7,13 +7,13 @@ def create_set_from_all_json_files():
     """
     unique_items = set()
     
-    for filename in os.listdir('.'):
+    for filename in os.listdir('scraped_data'):
         if filename.endswith('.json') and filename != 'unique_links.json':
-            with open(filename, 'r') as file:
+            with open(f'scraped_data/{filename}', 'r') as file:
                 data = json.load(file)
                 unique_items.update(data)
 
-    with open('unique_links.json', 'w') as outfile:
+    with open('scraped_data/unique_links.json', 'w') as outfile:
         json.dump(list(unique_items), outfile, indent=2)
 
 create_set_from_all_json_files()

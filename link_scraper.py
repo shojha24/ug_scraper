@@ -43,24 +43,20 @@ async def scrape_links(genre_num, browser):
     base_url = "https://www.ultimate-guitar.com/explore"
     all_links = []
 
-    try:
-        for page in range(1, (SONG_CAP // SONGS_PER_PAGE) + 1):
-            url = f"{base_url}?order=hitstotal_desc&genres[]={genre_num}&page={page}"
-            tab = await browser.get(url)
-            link_elems = await wait_for_min_links(tab, "a[tabcount]")
-            links = [elem.attributes[5] for elem in link_elems]
-            all_links.extend(links)
+    for page in range(1, (SONG_CAP // SONGS_PER_PAGE) + 1):
+        url = f"{base_url}?order=hitstotal_desc&genres[]={genre_num}&page={page}"
+        tab = await browser.get(url)
+        link_elems = await wait_for_min_links(tab, "a[tabcount]")
+        links = [elem.attributes[5] for elem in link_elems if "chords" in elem.attributes[5]]
+        all_links.extend(links)
 
-            print(f"Page {page}: Found {len(link_elems)} links; Sample link: {links[0]}")
+        print(f"Page {page}: Found {len(links)} links; Sample link: {links[0]}")
 
-            # Add delay between pages to avoid IP bans
-            time.sleep(random.uniform(0, 2))
-
-    finally:
-        pass
+        # Add delay between pages to avoid IP bans
+        await asyncio.sleep(random.uniform(0, 1))
 
     genre_name = GENRE_NUMBERS[genre_num].lower().replace('-', '')
-    filename = f"{genre_name}_links.json"
+    filename = f"scraped_data/{genre_name}_links.json"
     with open(filename, "w") as f:
         json.dump(all_links, f, indent=2)
 
