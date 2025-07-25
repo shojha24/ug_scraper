@@ -30,13 +30,13 @@ async def is_valid_chart(container):
 
 # Polling to make sure we can scrape the link properly
 
-async def wait_for_html(tab, selector: str, timeout=10_000, interval=0.5):
+async def wait_for_html(tab, selector: str, timeout=6, interval=0.2):
     """
     Repeatedly tries to find the selector until timeout is reached.
     Returns the parsed HTML or None if not found.
     """
     curr_val = None
-    max_attempts = int(timeout / (interval * 1000))
+    max_attempts = int(timeout / interval)
     for _ in range(max_attempts):
         node = await tab.query_selector(selector)
         if node:
@@ -106,7 +106,7 @@ async def scrape_tabs(browser, first_tab=None, last_tab=None):
             # 1. Open each link in a new, fresh tab
             tab = await browser.get(link, new_tab=True)
 
-            await asyncio.sleep(1.5)  # Give the tab some time to load
+            await asyncio.sleep(random.uniform(1.0, 1.5))  # Give the tab some time to load
 
             # Validate the chart content
             is_valid = await is_valid_chart(tab)
