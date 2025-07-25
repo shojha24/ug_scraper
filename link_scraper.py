@@ -11,16 +11,10 @@ GENRE_NUMBERS = {
     666: "Folk",
     49: "Country",
     1787: "RnB",
-    45: "Hip-Hop",
     16: "Electronic",
-    216: "Classical",
-    84: "Jazz",
-    1016: "Worship",
-    680: "Soundtrack",
-    1781: "Reggae"
 }
 
-SONG_CAP = 5000         # Max number of songs per genre
+SONG_CAP = 4000         # Max number of songs per genre
 SONGS_PER_PAGE = 50     # Songs per page
 
 async def wait_for_min_links(tab, selector, min_count=50, timeout=8000, interval=0.25):
@@ -42,12 +36,29 @@ async def wait_for_min_links(tab, selector, min_count=50, timeout=8000, interval
 async def scrape_links(genre_num, browser):
     base_url = "https://www.ultimate-guitar.com/explore"
     all_links = []
+    song_names = set()
+    page = 0
 
-    for page in range(1, (SONG_CAP // SONGS_PER_PAGE) + 1):
-        url = f"{base_url}?order=hitstotal_desc&genres[]={genre_num}&page={page}"
+    while len(all_links) < SONG_CAP and page < 100:
+        page += 1
+        url = f"{base_url}?order=hitstotal_desc&genres[]={genre_num}&page={page}&type[]=Chords"
         tab = await browser.get(url)
+
+        await asyncio.sleep(random.uniform(1.5, 2.5))  # Small delay to avoid being blocked
+
         link_elems = await wait_for_min_links(tab, "a[tabcount]")
-        links = [elem.attributes[5] for elem in link_elems if "chords" in elem.attributes[5]]
+
+        links = []
+        for elem in link_elems:
+            num_names = len(song_names)
+            if elem.text.find("(") != -1:
+                song_names.add(elem.text[:elem.text.find(" (")])
+            else:
+                song_names.add(elem.text)
+            if len(song_names) == num_names:
+                continue
+            links.append(elem.attributes[5])
+
         all_links.extend(links)
 
         print(f"Page {page}: Found {len(links)} links; Sample link: {links[0]}")
@@ -65,10 +76,11 @@ async def scrape_links(genre_num, browser):
 
 async def main():
     browser = await uc.start(
-                headless=False,
+                headless=True,
                 browser_args=['--no-sandbox', '--disable-dev-shm-usage', 
                               '--disable-blink-features=AutomationControlled', 
                               '--ignore-certificate-errors', '--ignore-ssl-errors',
+                              '--headless=new',
                               '--start-maximized'],
                 lang="en-US"   # this could set iso-language-code in navigator, not recommended to change
             )

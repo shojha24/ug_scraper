@@ -8,15 +8,9 @@ import nodriver as uc
 import re
 import bs4
 
-# Regex to validate a full line of chords (1 or more chords)
-chord_line_pattern = re.compile(
-    r"^([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d?(?:\/[A-G][#b]?)?\s*)+$",
-    re.IGNORECASE
-)
-
 # Regex to extract individual chords from a line
 chord_token = re.compile(
-    r"\b([A-G](?:#|b)?(?:m|maj|min|dim|aug|sus|add)?\d*(?:\/[A-G](?:#|b)?)?)\b"
+    r"([A-G](?:#|b)?(?:maj|min|dim|aug|sus|add|m|\+)?\d*(?:\/[A-G](?:#|b)?)?)"
 )
 
 # It's a good practice to load this once at the top
@@ -62,59 +56,33 @@ async def extract_chords_by_section(container):
         # Wait for the <pre> element (which holds the chord tab)
         soup = await wait_for_html(container, "pre")
         if not soup:
-            return {"sections": {}, "count": 0}
+            return {"count": 0, "chord_list": [], "chord_set": []}
 
-        # Split soup text into lines using \n delimiter
-        lines = soup.get_text().splitlines()        
+        # Get soup text
+        text = soup.get_text()
 
         # Initial state
-        current_section = "Unnamed Section"
-        section_counts = {}
-        section_order = []
-        song_info = {
-            "sections": {current_section: []},
-        }
-        all_chords = set()
 
-        # Add "Unnamed Section" to order list first
-        section_order.append(current_section)
+        song_info = {}
+        all_chords_set = set()
+        all_chords_list = []
 
-        for line in lines:
-            line = line.strip()
+        chord_matches = chord_token.finditer(text)
 
-            # Detect section headers like [Verse 1], [Chorus], etc.
-            if line.startswith("[") and line.endswith("]"):
-                base_section = line.strip("[]").strip().lower().title()  # Normalize section header
-                section_counts[base_section] = section_counts.get(base_section, 0) + 1
-                if section_counts[base_section] > 1:
-                    current_section = f"{base_section} {section_counts[base_section]}"
-                else:
-                    current_section = base_section
-
-                if current_section not in song_info["sections"]:
-                    song_info["sections"][current_section] = []
-                    section_order.append(current_section)
+        for match in chord_matches:
+            chord = match.group(0)
+            if (match.end() < len(text) and text[match.end()].islower()):
                 continue
+            all_chords_list.append(chord)
 
-            # If the line looks like a chord line, process it
-            if chord_line_pattern.match(line):
-                chords = chord_token.findall(line)
-                if chords:
-                    for chord in chords:
-                        song_info["sections"][current_section].append(chord)
-                        all_chords.add(chord)
+        if not all_chords_list:
+            return {"count": 0, "chord_list": [], "chord_set": []}
 
-        # Optionally filter out truly empty sections (sections with no chords)
-        song_info["sections"] = {k: v for k, v in song_info["sections"].items() if v}
+        all_chords_set.update(all_chords_list)
+        song_info["chord_set"] = list(all_chords_set)
+        song_info["chord_list"] = all_chords_list
+        song_info["count"] = len(all_chords_list)
 
-        # Recalculate section order to remove names that were filtered out
-        song_info["section_order"] = [
-            sec for sec in section_order if sec in song_info["sections"]
-        ]
-
-        song_info["count"] = sum(len(v) for v in song_info["sections"].values())
-
-        song_info["chords_used"] = list(all_chords)
         return song_info
 
     except Exception:
@@ -138,6 +106,8 @@ async def scrape_tabs(browser, first_tab=None, last_tab=None):
             # 1. Open each link in a new, fresh tab
             tab = await browser.get(link, new_tab=True)
 
+            await asyncio.sleep(1.5)  # Give the tab some time to load
+
             # Validate the chart content
             is_valid = await is_valid_chart(tab)
             if not is_valid:
@@ -158,7 +128,7 @@ async def scrape_tabs(browser, first_tab=None, last_tab=None):
                 tqdm.write(f"⚠️ Could not close tab for {link}: {close_e}")
             
             # A small delay can help avoid rate-limiting
-            await asyncio.sleep(random.uniform(0.0, 0.3))
+            await asyncio.sleep(random.uniform(0.0, 0.4))
 
         except Exception as e:
             tqdm.write(f"❌ Error scraping {link}: {e}")
@@ -173,7 +143,7 @@ async def main():
         return
 
     browser = await uc.start(
-        headless=False, # Set to True for production runs
+        headless=True, # Set to True for production runs
         browser_args=[
             "--no-sandbox",
             "--disable-dev-shm-usage",
@@ -184,10 +154,8 @@ async def main():
         ],
         lang="en-US"
     )
-    
-    await asyncio.sleep(random.uniform(0.5, 1.5))
 
-    batch_size = 100 # Number of links to scrape in one go
+    batch_size = 200 # Number of links to scrape in one go
     links_done = 0
     total_links = len(links)
 
@@ -208,7 +176,7 @@ async def main():
         browser.stop()
 
         browser = await uc.start(
-            headless=False, # Set to True for production runs
+            headless=True, # Set to True for production runs
             browser_args=[
                 "--no-sandbox",
                 "--disable-dev-shm-usage",
@@ -218,8 +186,6 @@ async def main():
                 "--start-maximized",
             ],
         )
-
-        await asyncio.sleep(random.uniform(0.5, 1.5))  # Small delay between batches
     
     print("🛑 Stopping browser.")
     browser.stop()
