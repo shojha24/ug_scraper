@@ -57,21 +57,39 @@ def get_unscraped_links():
     except FileNotFoundError:
         print("❌ Error: file not found. Please create the file with a list of URLs.")
 
-def get_song_num():
+def get_song_dataset_stats():
     """
-    Get the number of songs in the 'all_chords' directory.
+    Get the number of songs in the 'all_chords' directory; calculate the average number of chords per song as well
+    as range statistics (most chords in a song, least chords in a song). In addition, collect all unique chords
+    and return the list of unique chords.
     """
     try:
+        print(f"Dataset Statistics")
         with open('all_chords/all_chords.json', 'r') as f:
             data = json.load(f)
-            return len(data)
+            print(f"Total number of songs: {len(data)}")
+
+            chord_counts = [len(details['chord_list']) for details in data.values() if 'chord_list' in details]
+            avg_chords = sum(chord_counts) / len(chord_counts)
+            most_chords = max(chord_counts)
+            least_chords = min(chord_counts)
+            print(f"Average number of chords per song: {avg_chords}")
+            print(f"Most chords in a song: {most_chords}")
+            print(f"Least chords in a song: {least_chords}")
+
+            unique_chords = set()
+            for details in data.values():
+                unique_chords.update(details.get('chord_set', []))
+
+            print(f"Total unique chords: {len(unique_chords)}")
+            print(f"Unique chords: {sorted(unique_chords)}")
+            
     except FileNotFoundError:
         print("❌ Error: 'all_chords/all_chords.json' file not found.")
-        return 0
 
 
 if __name__ == "__main__":
     # create_set_from_all_json_files()
     # combine_all_chords()
     # get_unscraped_links()
-    print(f"Total number of songs: {get_song_num()}")
+    get_song_dataset_stats()
