@@ -36,11 +36,42 @@ def combine_all_chords():
     with open('all_chords/all_chords.json', 'w') as outfile:
         json.dump(all_chords, outfile, indent=2)
 
+def get_unscraped_links():
+    """
+    Get a list of links that have not been scraped yet.
+    """
+    try:
+        scraped_links = set()
+        all_links = set()
+
+        with open('all_chords/all_chords.json', 'r') as f:
+            scraped_links = set(json.load(f).keys())
+        with open('scraped_data/unique_links.json', 'r') as f:
+            all_links = set(json.load(f))
+
+        links = list(all_links - scraped_links)
+
+        with open('scraped_data/unscraped_links.json', 'w') as f:
+            json.dump(links, f, indent=2)
+        
+    except FileNotFoundError:
+        print("❌ Error: file not found. Please create the file with a list of URLs.")
+
+def get_song_num():
+    """
+    Get the number of songs in the 'all_chords' directory.
+    """
+    try:
+        with open('all_chords/all_chords.json', 'r') as f:
+            data = json.load(f)
+            return len(data)
+    except FileNotFoundError:
+        print("❌ Error: 'all_chords/all_chords.json' file not found.")
+        return 0
 
 
 if __name__ == "__main__":
     # create_set_from_all_json_files()
-    combine_all_chords()
-
-
-
+    # combine_all_chords()
+    # get_unscraped_links()
+    print(f"Total number of songs: {get_song_num()}")

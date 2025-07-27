@@ -1,5 +1,4 @@
 import json
-import time
 import random
 import asyncio
 from pathlib import Path
@@ -8,29 +7,19 @@ import nodriver as uc
 import re
 import bs4
 
-# Regex to extract individual chords from a line
-chord_token = re.compile(
-    r"([A-G](?:#|b)?(?:maj|min|dim|aug|sus|add|m|\+)?\d*(?:\/[A-G](?:#|b)?)?)"
-)
+all_links_path = 'scraped_data/unique_links.json'
+unscraped_links_path = 'scraped_data/unscraped_links.json'
 
-# It's a good practice to load this once at the top
 try:
-    with open('scraped_data/unique_links.json', 'r') as f:
+    with open(unscraped_links_path, 'r') as f:
         links = json.load(f)
 except FileNotFoundError:
-    print("❌ Error: 'scraped_data/unique_links.json' not found. Please create the file with a list of URLs.")
+    print(f"❌ Error: file not found. Please create the file with a list of URLs.")
     links = []
 
 
-# Check if chord chart is still valid
-
-async def is_valid_chart(container):
-    invalid_elem = await container.query_selector("a[href='https://www.ultimate-guitar.com/article/blog/licensing']")
-    return invalid_elem is None
-
 # Polling to make sure we can scrape the link properly
-
-async def wait_for_html(tab, selector: str, timeout=6, interval=0.2):
+async def wait_for_html(tab, selector: str, filter: str, timeout=6, interval=0.2):
     """
     Repeatedly tries to find the selector until timeout is reached.
     Returns the parsed HTML or None if not found.
@@ -46,37 +35,35 @@ async def wait_for_html(tab, selector: str, timeout=6, interval=0.2):
             if new_val == curr_val:
                 return curr_val
             curr_val = new_val
+
+        filter_node = await tab.find(filter, timeout=0.15)
+        if filter_node:
+            return None
         await asyncio.sleep(interval)
     return curr_val
 
-# --- Your extraction logic (unchanged, it's good) ---
-
+# Extract chords from the <pre> element
 async def extract_chords_by_section(container):
     try:
         # Wait for the <pre> element (which holds the chord tab)
-        soup = await wait_for_html(container, "pre")
+        soup = await wait_for_html(container, "pre", 'This tab has been removed at the request of the publisher')
+
         if not soup:
             return {"count": 0, "chord_list": [], "chord_set": []}
+        
+        # Get all <span> elements with attribute data-name set to something
+        spans = soup.find_all("span", attrs={"data-original-chord": True})
 
-        # Get soup text
-        text = soup.get_text()
+        # Extract the text from these spans
+        all_chords_list = [span.get_text(strip=True) for span in spans if span.get_text(strip=True)]
+
+        if not all_chords_list:
+            return {"count": 0, "chord_list": [], "chord_set": []}
 
         # Initial state
 
         song_info = {}
         all_chords_set = set()
-        all_chords_list = []
-
-        chord_matches = chord_token.finditer(text)
-
-        for match in chord_matches:
-            chord = match.group(0)
-            if (match.end() < len(text) and text[match.end()].islower()):
-                continue
-            all_chords_list.append(chord)
-
-        if not all_chords_list:
-            return {"count": 0, "chord_list": [], "chord_set": []}
 
         all_chords_set.update(all_chords_list)
         song_info["chord_set"] = list(all_chords_set)
@@ -90,8 +77,7 @@ async def extract_chords_by_section(container):
         traceback.print_exc()
         return {}
 
-# --- THE MAIN FIX IS HERE ---
-
+# Scrape chords from the links
 async def scrape_tabs(browser, first_tab=None, last_tab=None):
     results = {}
     links_to_scrape = links[first_tab:last_tab] if (first_tab is not None and last_tab is not None) else links
@@ -99,20 +85,16 @@ async def scrape_tabs(browser, first_tab=None, last_tab=None):
         return {}
 
     # Use tqdm on the list of links
-    for link in tqdm(links_to_scrape, desc="Scraping Tabs"):
+    for i, link in enumerate(tqdm(links_to_scrape, desc="Scraping Tabs")):
         tab = None  # Define tab here to ensure it's available in the finally block
         try:
 
-            # 1. Open each link in a new, fresh tab
+            # Open each link in a new, fresh tab
             tab = await browser.get(link, new_tab=True)
 
-            await asyncio.sleep(random.uniform(1.0, 1.5))  # Give the tab some time to load
-
-            # Validate the chart content
-            is_valid = await is_valid_chart(tab)
-            if not is_valid:
-                tqdm.write(f"⚠️ Invalid or inaccessible chart: {link}")
-                continue
+            if i == 0:
+                await asyncio.sleep(0.5)
+            await asyncio.sleep(random.uniform(1.5, 1.8))  # Small delay to avoid being blocked
 
             # Extract data
             song_info = await extract_chords_by_section(tab)
@@ -121,6 +103,8 @@ async def scrape_tabs(browser, first_tab=None, last_tab=None):
             if song_info and song_info.get("count", 0) > 0:
                 results[link] = song_info
                 tqdm.write(f"✅ Scraped {song_info['count']} chords from {link}")
+            else:
+                tqdm.write(f"❌ No valid chords found in {link}")
 
             try:
                 await tab.close()
@@ -128,7 +112,7 @@ async def scrape_tabs(browser, first_tab=None, last_tab=None):
                 tqdm.write(f"⚠️ Could not close tab for {link}: {close_e}")
             
             # A small delay can help avoid rate-limiting
-            await asyncio.sleep(random.uniform(0.0, 0.4))
+            await asyncio.sleep(random.uniform(0.0, 0.3))
 
         except Exception as e:
             tqdm.write(f"❌ Error scraping {link}: {e}")
@@ -136,8 +120,7 @@ async def scrape_tabs(browser, first_tab=None, last_tab=None):
     return results
 
 
-# --- Main execution block (unchanged, it's good) ---
-
+# --- Main execution block ---
 async def main():
     if not links:
         return
@@ -149,11 +132,15 @@ async def main():
             "--disable-dev-shm-usage",
             "--disable-blink-features=AutomationControlled",
             "--headless=new",  # ✅ Use new headless mode (headful-like behavior)
-            "--window-size=1920,1080",
+            "--window-size=127,826",
             "--start-maximized",
+            "--user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
         ],
         lang="en-US"
     )
+
+    tqdm.write("🛠️ Browser initialized...")
 
     batch_size = 200 # Number of links to scrape in one go
     links_done = 0
@@ -182,8 +169,10 @@ async def main():
                 "--disable-dev-shm-usage",
                 "--disable-blink-features=AutomationControlled",
                 "--headless=new",  # ✅ Use new headless mode (headful-like behavior)
-                "--window-size=1920,1080",
+                "--window-size=127,826",
                 "--start-maximized",
+                "--user-agent=Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
+                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
             ],
         )
     
